@@ -10,7 +10,6 @@ void setup() {
 }
 
 void loop() {
-  
   digitalWrite(LED, HIGH);
   Serial.println("LED ON");
   delay(1000);
@@ -18,5 +17,5 @@ void loop() {
   digitalWrite(LED, LOW);
   Serial.println("LED OFF");
   delay(2000);
-  
+
 }

@@ -2,7 +2,7 @@
 #include <HT_SSD1306Wire.h>
 #include "image.h"
 
-static SSD1306Wire display(0x3c, 500000, SDA_OLED, SCL_OLED, GEOMETRY_128_64, RST_OLED);
+SSD1306Wire display(0x3c, 500000, SDA_OLED, SCL_OLED, GEOMETRY_128_64, RST_OLED);
 
 #define DEMO_DURATION 3000
 typedef void (*Demo)(void);
@@ -14,7 +14,7 @@ void drawText()
 {
     display.setTextAlignment(TEXT_ALIGN_LEFT);
     display.setFont(ArialMT_Plain_10);
-    display.drawString(0, 0, "size 10");
+    display.drawString(128, 64, "size 10");
 
     display.setTextAlignment(TEXT_ALIGN_CENTER);
     display.setFont(ArialMT_Plain_16);

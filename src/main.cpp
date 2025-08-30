@@ -1,112 +1,254 @@
-#include <Arduino.h>
-#include <HT_SSD1306Wire.h>
-#include "image.h"
+#include <Arduino.h> 
+#include <SPI.h>
+#include <RadioLib.h>
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEServer.h>
+#include <BLE2902.h>
 
-static SSD1306Wire display(0x3c, 500000, SDA_OLED, SCL_OLED, GEOMETRY_128_64, RST_OLED);
+// ================== LoRa PIN MAP (Heltec V3, SX1262) ==================
+#define LORA_SS    8     // NSS
+#define LORA_DIO1  14    // DIO1
+#define LORA_RST   12    // RESET
+#define LORA_BUSY  13    // BUSY
 
-#define DEMO_DURATION 3000
-typedef void (*Demo)(void);
+SX1262 lora = new Module(LORA_SS, LORA_DIO1, LORA_RST, LORA_BUSY);
 
-int demoMode = 0;
-int counter = 0;
+// ================== BLE UUIDs ==================
+#define SERVICE_UUID            "22345678-1234-5678-1234-56789abcdef0"
+#define CHARACTERISTIC_UUID_RX  "22345678-1234-5678-1234-56789abcdef1"
+#define CHARACTERISTIC_UUID_TX  "22345678-1234-5678-1234-56789abcdef2"
 
-void drawText()
-{
-    display.setTextAlignment(TEXT_ALIGN_LEFT);
-    display.setFont(ArialMT_Plain_10);
-    display.drawString(0, 0, "size 10");
+// Give each device a distinct BLE name for clarity
+#ifndef BLE_NAME
+#define BLE_NAME "LoRa-BLE Node ipad"
+#endif
 
-    display.setTextAlignment(TEXT_ALIGN_CENTER);
-    display.setFont(ArialMT_Plain_16);
-    display.drawString(display.width() / 2, display.height() / 2 - 8, "size 16");
+BLECharacteristic* txChar;
+BLECharacteristic* rxChar;
+BLEAdvertising* advertising;
 
-    display.setTextAlignment(TEXT_ALIGN_RIGHT);
-    display.setFont(ArialMT_Plain_24);
-    display.drawString(display.width(), display.height() - 24, "size 24");
+// ================== Reliability Layer Config ==================
+static const unsigned long ACK_TIMEOUT_MS = 600;   // wait this long for ACK
+static const int MAX_RETRIES = 3;                  // retries before giving up
+static const size_t LORA_SAFE_PAYLOAD = 200;       // keep under ~200 bytes
+
+// ================== State (TX with ACK) ==================
+volatile bool hasNewBLEMessage = false;  // set in RX callback
+String pendingBLEPayload = "";           // last payload from phone
+
+// Outgoing message tracking
+uint32_t msgCounter = 0;     // increases per message we send
+int lastTxState = 0;         // last transmit() return code
+
+bool awaitingAck = false;
+uint32_t lastMsgId = 0;
+String lastFramedMessage = "";     // "<ID>|<payload>"
+unsigned long lastSendTimeMs = 0;
+int retryCount = 0;
+
+// ================ Helpers: Framing =================
+// frame: "<ID>|<payload>"
+static String frameMessage(uint32_t id, const String& payload) {
+  return String(id) + "|" + payload;
 }
 
-void drawTextFlow()
-{
-    display.setTextAlignment(TEXT_ALIGN_LEFT);
-    display.setFont(ArialMT_Plain_10);
-    display.drawStringMaxWidth(0, 0, 128, "this is a long text to test TextFlow functionality, it should wrap to the next line when it hits the end of the line");
+static bool isAck(const String& s, uint32_t& ackIdOut) {
+  if (!s.startsWith("ACK|")) return false;
+  ackIdOut = s.substring(4).toInt();
+  return true;
 }
 
-void drawRect()
-{
-    for (int i = 0; i < 7; i++)
-    {
-        display.setPixel(i, i);
-        display.setPixel(7 - i, i);
+static bool parseFramed(const String& s, uint32_t& idOut, String& payloadOut) {
+  int sep = s.indexOf('|');
+  if (sep <= 0) return false;
+  idOut = s.substring(0, sep).toInt();
+  payloadOut = s.substring(sep + 1);
+  return true;
+}
+
+// ================ BLE Callbacks =================
+class RXCallback : public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic* characteristic) override {
+    std::string v = characteristic->getValue();
+    if (!v.empty()) {
+      pendingBLEPayload = String(v.c_str());
+
+      // enforce a max payload for LoRa
+      if (pendingBLEPayload.length() > LORA_SAFE_PAYLOAD) {
+        pendingBLEPayload = pendingBLEPayload.substring(0, LORA_SAFE_PAYLOAD);
+      }
+
+      hasNewBLEMessage = true;
+      Serial.print("[BLE] RX from phone: ");
+      Serial.println(pendingBLEPayload);
+    }
+  }
+};
+
+class ServerCallbacks : public BLEServerCallbacks {
+  void onConnect(BLEServer* pServer) override {
+    Serial.println("[BLE] Client connected");
+  }
+  void onDisconnect(BLEServer* pServer) override {
+    Serial.println("[BLE] Client disconnected");
+    advertising->start();
+  }
+};
+
+// ================ LoRa Send with ACK =================
+void startSendWithAck(const String& payload) {
+  if (awaitingAck) {
+    Serial.println("[WARN] Still awaiting ACK; dropping new send request to keep logic simple.");
+    return;
+  }
+
+  msgCounter++;
+  lastMsgId = msgCounter;
+  lastFramedMessage = frameMessage(lastMsgId, payload);
+
+  lastTxState = lora.transmit(lastFramedMessage.c_str());
+  Serial.printf("[LoRa] TX(id=%lu) state=%d\n", (unsigned long)lastMsgId, lastTxState);
+
+  if (lastTxState == RADIOLIB_ERR_NONE) {
+    awaitingAck = true;
+    retryCount = 0;
+    lastSendTimeMs = millis();
+  } else {
+    Serial.println("[ERROR] LoRa transmit failed (no ACK phase entered).");
+  }
+}
+
+void resendLast() {
+  lastTxState = lora.transmit(lastFramedMessage.c_str());
+  Serial.printf("[LoRa] RETRY TX(id=%lu) state=%d (attempt %d)\n",
+                (unsigned long)lastMsgId, lastTxState, retryCount);
+  lastSendTimeMs = millis();
+}
+
+// ================ Process LoRa Receive =================
+void processLoRaReceive() {
+  String rx;
+  int st = lora.receive(rx);
+  if (st == RADIOLIB_ERR_NONE) {
+    // Got a packet
+    Serial.print("[LoRa] RX raw: ");
+    Serial.println(rx);
+
+    // ACK packet?
+    uint32_t ackId = 0;
+    if (isAck(rx, ackId)) {
+      if (awaitingAck && ackId == lastMsgId) {
+        awaitingAck = false;
+        Serial.printf("[ACK] Received for id=%lu ✅\n", (unsigned long)ackId);
+      } else {
+        Serial.printf("[ACK] Received for id=%lu (no match/ignored)\n", (unsigned long)ackId);
+      }
+      return;
     }
 
-    display.drawRect(35, 20, 30, 30);
-    display.fillRect(75, 20, 30, 30);
+    // Normal data -> parse framed "<ID>|<payload>"
+    uint32_t recvId = 0;
+    String payload;
+    if (parseFramed(rx, recvId, payload)) {
+      // Send ACK back immediately
+      String ack = "ACK|" + String(recvId);
+      lora.transmit(ack.c_str());
+      Serial.printf("[ACK] Sent for id=%lu\n", (unsigned long)recvId);
 
-    display.drawHorizontalLine(0, 20, 10);
-    display.drawVerticalLine(20, 0, 10);
-}
-void drawCircle()
-{
-    for (int i = 0; i < 9; i++)
-    {
-        display.setPixel(i, i);
-        display.setPixel(9 - i, i);
+      // Forward payload to phone via BLE notify
+      if (txChar) {
+        txChar->setValue(payload.c_str());
+        txChar->notify();
+      }
+      Serial.print("[BLE] TX to phone: ");
+      Serial.println(payload);
+    } else {
+      // If packet isn’t framed, treat as plain payload (legacy)
+      // Forward to phone and do not ACK (no id)
+      if (txChar) {
+        txChar->setValue(rx.c_str());
+        txChar->notify();
+      }
+      Serial.println("[INFO] Unframed payload forwarded (no ACK sent).");
     }
-
-    display.drawCircle(display.width() / 3, display.height() / 2, 15);
-    display.fillCircle(display.width() * 2 / 3, display.height() / 2, 15);
-
-    display.drawHorizontalLine(0, 15, 10);
-    display.drawVerticalLine(15, 0, 10);
+  }
 }
 
-void drawProgressBar()
-{
-    int progress = counter % 101;
-    display.drawProgressBar(display.width() / 2 - 50, display.height() / 2, 100, 10, progress);
-    display.setTextAlignment(TEXT_ALIGN_CENTER);
-    display.drawString(display.width() / 2, display.height() / 2 + 18, String(progress) + "%");
-    counter++;
-    delay(250);
-}
+// ================ Check ACK Timeout / Retries =================
+void checkAckTimeouts() {
+  if (!awaitingAck) return;
 
-void drawImage()
-{
-    display.drawXbm(15, 5, image_width, image_height, image_bits);
-}
-
-void VextON(void)
-{
-    pinMode(Vext, OUTPUT);
-    digitalWrite(Vext, LOW);
-}
-void VextOFF(void)
-{
-    pinMode(Vext, OUTPUT);
-    digitalWrite(Vext, HIGH);
-}
-
-void setup()
-{
-    VextON();
-    delay(100);
-
-    display.init();
-}
-
-Demo demo[] = {drawText, drawTextFlow, drawRect, drawCircle, drawProgressBar, drawImage};
-int demoSize = sizeof(demo) / sizeof(Demo);
-long timeSinceLastDemo = 0;
-void loop()
-{
-    display.clear();
-    demo[demoMode]();
-    display.display();
-
-    if (millis() - timeSinceLastDemo > DEMO_DURATION)
-    {
-        demoMode = (demoMode + 1) % demoSize;
-        timeSinceLastDemo = millis();
+  if (millis() - lastSendTimeMs >= ACK_TIMEOUT_MS) {
+    if (retryCount < MAX_RETRIES) {
+      retryCount++;
+      Serial.printf("[Retry] Timeout; retry %d/%d\n", retryCount, MAX_RETRIES);
+      resendLast();
+    } else {
+      Serial.println("[ERROR] Message failed after retries ❌");
+      awaitingAck = false;
     }
+  }
+}
+
+// ================== Setup ==================
+void setup() {
+  Serial.begin(115200);
+  while (!Serial) {}
+
+  // ---- LoRa
+  Serial.println("[LoRa] Initializing...");
+  // freq=433.0 MHz, bw=125 kHz, sf=7, cr=5(4/5). Adjust as needed for your region/range.
+  int st = lora.begin(433.0, 125.0, 7, 5);
+  if (st != RADIOLIB_ERR_NONE) {
+    Serial.print("[LoRa] init failed, code: ");
+    Serial.println(st);
+    while (true) { delay(1000); }
+  }
+  lora.setOutputPower(17); // SX1262: 2..22 dBm
+  Serial.println("[LoRa] init success");
+
+  // ---- BLE
+  BLEDevice::init(BLE_NAME);
+  BLEServer* server = BLEDevice::createServer();
+  server->setCallbacks(new ServerCallbacks());
+
+  BLEService* service = server->createService(SERVICE_UUID);
+
+  txChar = service->createCharacteristic(
+    CHARACTERISTIC_UUID_TX,
+    BLECharacteristic::PROPERTY_NOTIFY
+  );
+  txChar->addDescriptor(new BLE2902()); // enables notifications on many clients
+
+  rxChar = service->createCharacteristic(
+    CHARACTERISTIC_UUID_RX,
+    BLECharacteristic::PROPERTY_WRITE
+  );
+  rxChar->setCallbacks(new RXCallback());
+
+  service->start();
+
+  advertising = server->getAdvertising();
+  advertising->start();
+  Serial.println("[BLE] Advertising started");
+}
+
+// ================== Loop ==================
+void loop() {
+  // 1) If phone wrote something to BLE RX, send it over LoRa with ACK
+  if (hasNewBLEMessage) {
+    hasNewBLEMessage = false;
+    // Kick off reliable send
+    startSendWithAck(pendingBLEPayload);
+  }
+
+  // 2) Always process incoming LoRa packets (ACKs or data)
+  processLoRaReceive();
+
+  // 3) Handle resend/timeout if awaiting ACK
+  checkAckTimeouts();
+
+  // Small pacing
+  delay(10);
 }

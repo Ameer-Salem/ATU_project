@@ -18,19 +18,28 @@ class MyServerCallbacks: public BLEServerCallbacks {
     Serial.println("Client disconnected");
   }
 };
+
+
 class MyCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic *pCharacteristic) {
     std::string rxValue = pCharacteristic->getValue();
     if (rxValue.length() > 0) {
       Serial.print("Received Value: ");
       
-      Serial.print(rxValue.length()/1024.0,3);
+      Serial.print(rxValue.c_str());
       Serial.println();
       // You can also process the received data here
     }
   }
 };
+
+
+
 BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+
+
+
+
 void setup() {
   Serial.begin(115200);
   Serial.println("Starting BLE Server...");
@@ -58,7 +67,7 @@ void setup() {
 }
 
 void loop() {
-  static unsigned long lastNotifyTime = 0;
+  int lastNotifyTime = 0 ;//2001;
   if (!deviceConnected) {
     // You can update characteristic value or notify client here
     pAdvertising->start();
@@ -68,9 +77,9 @@ void loop() {
   else
   {
     
-    unsigned long now = millis();
+    long now = millis(); // 4002
     if (now - lastNotifyTime > 2000) {  // notify every 2 seconds
-      static int count = 0;
+      int count = 0;
       char buffer[20];
       sprintf(buffer, "Count: %d", count++);
       pCharacteristic->setValue(buffer);
