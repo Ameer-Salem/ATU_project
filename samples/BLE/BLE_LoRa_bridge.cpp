@@ -6,13 +6,7 @@
 #include <BLEServer.h>
 #include <BLE2902.h>
 
-// ================= LoRa PIN MAP (Heltec V3, SX1262) =================
-#define LORA_SS     8    // NSS
-#define LORA_DIO1   14   // DIO1
-#define LORA_RST    12   // RESET
-#define LORA_BUSY   13   // BUSY
-
-SX1262 lora = new Module(LORA_SS, LORA_DIO1, LORA_RST, LORA_BUSY);
+SX1262 lora = new Module(SS, DIO0, RST_LoRa, BUSY_LoRa);
 
 // ================= BLE UUIDs =================
 #define SERVICE_UUID            "12345678-1234-5678-1234-56789abcdef0"
@@ -100,8 +94,6 @@ void loop() {
     hasNewMessage = false;
     int state = lora.transmit(bleMessage.c_str());
     delay(100);
-    Serial.print("[LoRa] TX state: ");
-    Serial.println(state);
 
     if (state == RADIOLIB_ERR_NONE) {
       Serial.print("[LoRa] Sent: ");
