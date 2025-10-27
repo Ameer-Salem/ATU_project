@@ -30,6 +30,7 @@ void toRaw(Packet &tx)
     buffer[2] = tx.destination;
     buffer[3] = tx.sequence;
     buffer[4] = tx.length;
+    
     for (int i = 0; i < tx.length; i++)
     {
         buffer[5 + i] = tx.payload[i];

@@ -1,8 +1,8 @@
 #pragma once
 #include <RadioLib.h>
 #include "simulation.h"
-#include "ble.h"
 #include <queue>
+#include "packet.h"
 
 extern std::queue<Packet> outgoingQueue;
 extern std::queue<Packet> ingoingQueue;

@@ -4,6 +4,7 @@
 #include <BLEServer.h>
 #include <BLE2902.h>
 #include "packet.h"
+#include "lora.h"
 
 extern BLECharacteristic *txChar;
 extern BLECharacteristic *rxChar;
