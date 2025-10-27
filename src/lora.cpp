@@ -1,6 +1,6 @@
 #include "lora.h"
 #include "packet.h"
-
+#include "ble.h"
 SX1262 lora = new Module(SS, DIO0, RST_LoRa, BUSY_LoRa);
 int state;
 
