@@ -32,13 +32,9 @@ void loop()
         operationDone = false;
         if (transmitFlag)
         {
+            sLog(LORA_TAG, "Previous operation was transmission");
             transmitFlag = false;
             startListening();
-            if (state != RADIOLIB_ERR_NONE)
-            {
-                sLog(LORA_TAG, "failed, code " + String(state));
-            }
-            sLog(LORA_TAG, "Previous operation was transmission");
         }
         else
         {

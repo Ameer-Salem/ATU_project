@@ -30,44 +30,44 @@ void loraBegin(float freq, float bw, int sf, int cr)
 
 void sendPacket(Packet &tx)
 {
-    //setPayload(tx);
-    //setPacket(tx);
+    memset(buffer, 0, sizeof(buffer));
     toRaw(tx);
 
-    if (SIMULATE_PACKET_LOSS)
-    {
-        if (tx.type == TEXT_TYPE && DROP_EVERY_NTH > 0 && (tx.sequence % DROP_EVERY_NTH) == 0)
-        {
-            sLog(LORA_TAG, "SIMULATED DROP of DATA packet seq " + String(tx.sequence));
-            state = RADIOLIB_ERR_NONE;
-            transmitFlag = true;
-            totalSent++;
-            return;
-        }
-        if (tx.type == ACK_TYPE && DROP_ACK_EVERY_NTH > 0 && (tx.sequence % DROP_ACK_EVERY_NTH) == 0)
-        {
-            sLog(LORA_TAG, "SIMULATED DROP of ACK seq " + String(tx.sequence));
-            state = RADIOLIB_ERR_NONE;
-            transmitFlag = true;
-            return;
-        }
-        int r = random(100);
-        if (tx.type == TEXT_TYPE && r < LOSS_PROBABILITY)
-        {
-            sLog(LORA_TAG, "SIMULATED RANDOM DROP of DATA packet seq " + String(tx.sequence) + " (r=" + String(r) + ")");
-            state = RADIOLIB_ERR_NONE;
-            transmitFlag = true;
-            totalSent++;
-            return;
-        }
-        if (tx.type == ACK_TYPE && r < LOSS_ACK_PROBABILITY)
-        {
-            sLog(LORA_TAG, "SIMULATED RANDOM DROP of ACK seq " + String(tx.sequence) + " (r=" + String(r) + ")");
-            state = RADIOLIB_ERR_NONE;
-            transmitFlag = true;
-            return;
-        }
-    }
+    // if (SIMULATE_PACKET_LOSS)
+    // {
+    //     if (tx.type == TEXT_TYPE && DROP_EVERY_NTH > 0 && (tx.sequence % DROP_EVERY_NTH) == 0)
+    //     {
+    //         sLog(LORA_TAG, "SIMULATED DROP of DATA packet seq " + String(tx.sequence));
+    //         state = RADIOLIB_ERR_NONE;
+    //         transmitFlag = true;
+    //         totalSent++;
+    //         return;
+    //     }
+    //     if (tx.type == ACK_TYPE && DROP_ACK_EVERY_NTH > 0 && (tx.sequence % DROP_ACK_EVERY_NTH) == 0)
+    //     {
+    //         sLog(LORA_TAG, "SIMULATED DROP of ACK seq " + String(tx.sequence));
+    //         state = RADIOLIB_ERR_NONE;
+    //         transmitFlag = true;
+    //         return;
+    //     }
+    //     int r = random(100);
+    //     if (tx.type == TEXT_TYPE && r < LOSS_PROBABILITY)
+    //     {
+    //         sLog(LORA_TAG, "SIMULATED RANDOM DROP of DATA packet seq " + String(tx.sequence) + " (r=" + String(r) + ")");
+    //         state = RADIOLIB_ERR_NONE;
+    //         transmitFlag = true;
+    //         totalSent++;
+    //         return;
+    //     }
+    //     if (tx.type == ACK_TYPE && r < LOSS_ACK_PROBABILITY)
+    //     {
+    //         sLog(LORA_TAG, "SIMULATED RANDOM DROP of ACK seq " + String(tx.sequence) + " (r=" + String(r) + ")");
+    //         state = RADIOLIB_ERR_NONE;
+    //         transmitFlag = true;
+    //         return;
+    //     }
+    // }
+
     // Real transmit
     state = lora.startTransmit(buffer, tx.length + 5);
     if (state == RADIOLIB_ERR_NONE)
@@ -116,17 +116,7 @@ void retrySend(){
     }
 }
 
-// void sendText(String &str){
-//     sequenceCounter++;
-//     retryCount = 0;
-//     sendPacket(TEXT_TYPE, SOURCE_ID, DESTINATION_ID, sequenceCounter, str);
-//     ackStartTime = millis();
-//     waitingForAck = true;
-//     sLog(LORA_TAG, "Waiting for ACK...");
-// }
-
 void receive(){
-    
             memset(buffer, 0, sizeof(buffer));
             memset(&rx, 0, sizeof(rx));
             int len = lora.getPacketLength();
@@ -152,8 +142,6 @@ void receive(){
                 waitingForAck = false;
                 txChar->setValue(buffer,len);
                 txChar->notify();
-
-
             }
             else
             {
