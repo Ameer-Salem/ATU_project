@@ -6,36 +6,54 @@ bool hasNewMessage = false;
 BLEAdvertising *advertising;
 BLEServer *pServer;
 BLEService *pService;
-BLECharacteristic *txChar;
-BLECharacteristic *rxChar;
+BLECharacteristic *notifyChar;
+BLECharacteristic *writeChar;
+BLECharacteristic *readChar;
 
+uint64_t intNODE_ID;
+String NODE_ID;
 
 void RXCallback::onWrite(BLECharacteristic *characteristic)
 {
-    uint8_t* pValue = characteristic->getData();
+    uint8_t *pValue = characteristic->getData();
     int len = characteristic->getLength();
-        if (len > 0)
+    if (len > 0)
+    {
+        Packet packet = fromRaw(pValue, len);
+        if (packet.type != ACK_TYPE)
         {
-            Packet packet;
-            
-            packet.type = pValue[0];
-            packet.source = pValue[1];
-            packet.destination = pValue[2];
-            packet.sequence = pValue[3];
-            packet.length = pValue[4];
-            for (int i = 0; i < packet.length; i++)
-            {
-                packet.payload[i] = pValue[5 + i];
-            }
             bleMessage = getPayload(packet);
+
             outgoingQueue.push(packet);
-            sLog(BLE_TAG, "Received from phone: " + bleMessage);
+            sLog(BLE_TAG,
+                 " \n===============\n "
+                 "Received from BLE: " +
+                     String(packet.type) + " : " +
+                     ((char *)packet.source) + " : " +
+                     ((char *)packet.destination) + " : " +
+                     ((char *)packet.uuid) + " : " +
+                     String(packet.segmentIndex) + " : " +
+                     String(packet.totalSegments) + " : " +
+                     String(packet.length) + " : " +
+                     bleMessage +
+                     " \n===============\n ");
         }
+        else
+        {
+            sLog(BLE_TAG, "Transmiting ACK...");
+            ackQueue.push(packet);
+        }
+    }
 }
 
 void MyServerCallbacks::onConnect(BLEServer *pServer)
 {
     sLog(BLE_TAG, "Client connected");
+    memset(&buffer, 0, sizeof(buffer));
+    bleMessage = "";
+    hasNewMessage = false;
+    operationDone = false;
+    transmitFlag = false;
 };
 
 void MyServerCallbacks::onDisconnect(BLEServer *pServer)
@@ -43,16 +61,30 @@ void MyServerCallbacks::onDisconnect(BLEServer *pServer)
     sLog(BLE_TAG, "Client disconnected");
     advertising->start();
 };
-
+String getBoardId()
+{
+    uint64_t chipid = ESP.getEfuseMac();
+    intNODE_ID = chipid; // 48-bit chip ID
+    char id[13];                         // 12 hex chars + null terminator
+    sprintf(id, "%012llX", chipid);
+    return String(id);
+}
 void bleSetup()
 {
     BLEDevice::init(NODE_NAME.c_str());
     pServer = BLEDevice::createServer();
     pService = pServer->createService(SERVICE_UUID);
-    txChar = pService->createCharacteristic(CHARACTERISTIC_UUID_TX, BLECharacteristic::PROPERTY_NOTIFY);
-    txChar->addDescriptor(new BLE2902());
-    rxChar = pService->createCharacteristic(CHARACTERISTIC_UUID_RX, BLECharacteristic::PROPERTY_WRITE);
-    rxChar->setCallbacks(new RXCallback());
+
+    readChar = pService->createCharacteristic(CHARACTERISTIC_UUID_read, BLECharacteristic::PROPERTY_READ);
+    NODE_ID = getBoardId();
+    readChar->setValue(NODE_ID.c_str());
+
+    notifyChar = pService->createCharacteristic(CHARACTERISTIC_UUID_notify, BLECharacteristic::PROPERTY_NOTIFY);
+    notifyChar->addDescriptor(new BLE2902());
+
+    writeChar = pService->createCharacteristic(CHARACTERISTIC_UUID_write, BLECharacteristic::PROPERTY_WRITE);
+    writeChar->setCallbacks(new RXCallback());
+
     pServer->setCallbacks(new MyServerCallbacks());
     pService->start();
     advertising = pServer->getAdvertising();

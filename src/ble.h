@@ -6,8 +6,9 @@
 #include "packet.h"
 #include "lora.h"
 
-extern BLECharacteristic *txChar;
-extern BLECharacteristic *rxChar;
+extern BLECharacteristic *notifyChar;
+extern BLECharacteristic *writeChar;
+extern BLECharacteristic *readChar;
 extern BLEAdvertising *advertising;
 extern BLEServer *pServer;
 extern BLEService *pService;

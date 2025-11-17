@@ -1,58 +1,71 @@
 #include "packet.h"
 
-Packet tx;
-Packet rx;
-uint8_t buffer[206];
-void setPayload(Packet &tx )
+uint8_t buffer[255];
+void setPayload(Packet &packet)
 {
-    const String &myString = getPayload(tx);
-    int len = min((int)myString.length(), (int)sizeof(tx.payload));
+    const String &myString = getPayload(packet);
+    int len = min((int)myString.length(), (int)sizeof(packet.payload));
     for (int i = 0; i < len; i++)
     {
-        tx.payload[i] = myString[i];
+        packet.payload[i] = myString[i];
     }
 }
 
-// void setPacket(Packet &tx, const String &myString, uint8_t type, uint8_t source, uint8_t destination, uint8_t sequence)
-// {
-//     tx.type = type;
-//     tx.source = source;
-//     tx.destination = destination;
-//     tx.sequence = sequence;
-//     tx.length = myString.length();
-//     setPayload(tx);
-// }
-
-void toRaw(Packet &tx)
+int toRaw(Packet &packet)
 {
-    buffer[0] = tx.type;
-    buffer[1] = tx.source;
-    buffer[2] = tx.destination;
-    buffer[3] = tx.sequence;
-    buffer[4] = tx.length;
-    
-    for (int i = 0; i < tx.length; i++)
+    buffer[0] = packet.type;
+    for (int i = 0; i < sizeof(packet.source); i++)
     {
-        buffer[5 + i] = tx.payload[i];
+        buffer[1 + i] = packet.source[i];
     }
+    for (int i = 0; i < sizeof(packet.destination); i++)
+    {
+        buffer[7 + i] = packet.destination[i];
+    }
+    for (int i = 0; i < sizeof(packet.uuid); i++)
+    {
+        buffer[13 + i] = packet.uuid[i];
+    }
+    buffer[19] = packet.segmentIndex;
+    buffer[20] = packet.totalSegments;
+    buffer[21] = packet.length;
+    
+    for (int i = 0; i < packet.length; i++)
+    {
+        buffer[22 + i] = packet.payload[i];
+    }
+    return 22 + packet.length;
 }
 
-void fromRaw(uint8_t buffer[], int len)
+Packet fromRaw(uint8_t buffer[], int len)
 {
-    rx.type = buffer[0];
-    rx.source = buffer[1];
-    rx.destination = buffer[2];
-    rx.sequence = buffer[3];
-    rx.length = buffer[4];
-    int safeLen = min(rx.length, (uint8_t)sizeof(rx.payload));
+    Packet packet;
+    packet.type = buffer[0];
+    for (int i = 0; i < sizeof(packet.source); i++)
+    {
+        packet.source[i] = buffer[1 + i];
+    }
+    for (int i = 0; i < sizeof(packet.destination); i++)
+    {
+        packet.destination[i] = buffer[7 + i];
+    }
+    for (int i = 0; i < sizeof(packet.uuid); i++)
+    {
+        packet.uuid[i] = buffer[13 + i];
+    }
+    packet.segmentIndex = buffer[19];
+    packet.totalSegments = buffer[20];
+    packet.length = buffer[21];
+    int safeLen = min(packet.length, (uint8_t)sizeof(packet.payload));
     for (int i = 0; i < safeLen; i++)
     {
-        rx.payload[i] = buffer[5 + i];
+        packet.payload[i] = buffer[22 + i];
     }
-    rx.length = safeLen;
+    packet.length = safeLen;
+    return packet;
 }
 
-String getPayload(Packet packet)
+String getPayload(Packet &packet)
 {
     return String((char *)packet.payload, packet.length);
 }

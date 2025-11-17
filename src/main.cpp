@@ -43,32 +43,39 @@ void loop()
         }
     }
 
-    // Handle ACK timeout
-    if (waitingForAck && (millis() - ackStartTime > ACK_TIMEOUT))
+    if (!ackQueue.empty() && !transmitFlag && !operationDone)
     {
-        retrySend();
-    }
+        Packet ack = ackQueue.front();
 
-    // Handle BLE message
-    if (!outgoingQueue.empty() && !waitingForAck)
-    {
-        Packet nextPacket = outgoingQueue.front();
-        outgoingQueue.pop();
-        sendPacket(nextPacket);
+        if ((uint64_t)ack.destination == intNODE_ID)
+        {
+            int len = toRaw(ack);
+            ackQueue.pop();
+            notifyChar->setValue(buffer, len);
+            notifyChar->notify();
+            memset(buffer, 0, sizeof(buffer));
+        }
+        else
+        {
+            sendPacket(ack);
+            ackQueue.pop();
+        }
     }
-    if (!ingoingQueue.empty())
+    // Handle BLE message
+    if (!outgoingQueue.empty() && !transmitFlag && ackQueue.empty())
+    {
+        Packet tx = outgoingQueue.front();
+        outgoingQueue.pop();
+        sendPacket(tx);
+    }
+    if (!ingoingQueue.empty() && ackQueue.empty())
     {
         Packet packet = ingoingQueue.front();
-        toRaw(packet);
+        int len = toRaw(packet);
         ingoingQueue.pop();
-        txChar->setValue(buffer, sizeof(buffer));
-        txChar->notify();
+        notifyChar->setValue(buffer, len);
+        notifyChar->notify();
+        memset(buffer, 0, sizeof(buffer));
         sLog(BLE_TAG, "Forwarded Buffered TEXT: " + getPayload(packet));
-    }
-    // Print stats
-    if (millis() - lastStatsTime > STATS_INTERVAL)
-    {
-        lastStatsTime = millis();
-        sLog(LORA_TAG, "STATS: sent=" + String(totalSent) + " acks=" + String(totalAcks) + " retries=" + String(totalRetries) + " failed=" + String(totalFailed));
     }
 }

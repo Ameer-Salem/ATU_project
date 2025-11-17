@@ -5,7 +5,7 @@ inline short LOSS_PROBABILITY = 30;
 inline short LOSS_ACK_PROBABILITY = 10;
 inline short DROP_EVERY_NTH = 0;
 inline short DROP_ACK_EVERY_NTH = 0;
-inline short STATS_INTERVAL = 5000;
+inline short STATS_INTERVAL = 50000;
 
 inline unsigned long lastStatsTime = 0;
 inline unsigned long totalSent = 0;
