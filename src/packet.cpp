@@ -41,7 +41,7 @@ Packet fromRaw(uint8_t buffer[], int len)
 {
     Packet packet;
     packet.type = buffer[0];
-    for (int i = 0; i < sizeof(packet.source); i++)
+    for (int i = 0; i < 6; i++)
     {
         packet.source[i] = buffer[1 + i];
     }

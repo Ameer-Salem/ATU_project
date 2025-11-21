@@ -25,18 +25,16 @@ void RXCallback::onWrite(BLECharacteristic *characteristic)
             bleMessage = getPayload(packet);
 
             outgoingQueue.push(packet);
-            sLog(BLE_TAG,
-                 " \n===============\n "
-                 "Received from BLE: " +
-                     String(packet.type) + " : " +
-                     ((char *)packet.source) + " : " +
-                     ((char *)packet.destination) + " : " +
-                     ((char *)packet.uuid) + " : " +
-                     String(packet.segmentIndex) + " : " +
-                     String(packet.totalSegments) + " : " +
-                     String(packet.length) + " : " +
-                     bleMessage +
-                     " \n===============\n ");
+            sLog(BLE_TAG, " \n===============\n Received from BLE: ");
+            logBytes(BLE_TAG, "type", &packet.type, sizeof(packet.type));
+            logBytes(BLE_TAG, "source", packet.source, sizeof(packet.source));
+            logBytes(BLE_TAG, "destination", packet.destination, sizeof(packet.destination));
+            logBytes(BLE_TAG, "uuid", packet.uuid, sizeof(packet.uuid));
+            logBytes(BLE_TAG, "segmentIndex", &packet.segmentIndex, sizeof(packet.segmentIndex));
+            logBytes(BLE_TAG, "totalSegments", &packet.totalSegments, sizeof(packet.totalSegments));
+            logBytes(BLE_TAG, "length", &packet.length, sizeof(packet.length));
+            sLog(BLE_TAG, "payload: " + getPayload(packet));
+            sLog(BLE_TAG, " \n===============\n");
         }
         else
         {
@@ -61,17 +59,18 @@ void MyServerCallbacks::onDisconnect(BLEServer *pServer)
     sLog(BLE_TAG, "Client disconnected");
     advertising->start();
 };
+
 String getBoardId()
 {
     uint64_t chipid = ESP.getEfuseMac();
     intNODE_ID = chipid; // 48-bit chip ID
-    char id[13];                         // 12 hex chars + null terminator
+    char id[13];         // 12 hex chars + null terminator
     sprintf(id, "%012llX", chipid);
     return String(id);
 }
 void bleSetup()
 {
-    BLEDevice::init(NODE_NAME.c_str());
+    BLEDevice::init("LoraDevice");
     pServer = BLEDevice::createServer();
     pService = pServer->createService(SERVICE_UUID);
 
