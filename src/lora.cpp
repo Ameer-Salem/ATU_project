@@ -75,12 +75,11 @@ void receive()
 
     if (packet.type == ACK_TYPE)
     {
-        sLog(LORA_TAG, "Received ACK! for uid : " + String((char *)packet.uuid) + " - segmentIndex " + String(packet.segmentIndex));
+        sLog(LORA_TAG, "Received ACK! for segmentIndex " + String(packet.segmentIndex));
         ackQueue.push(packet);
     }
     else
     {
         ingoingQueue.push(packet);
-        sLog(LORA_TAG, "Buffered new TEXT: " + String((char *)packet.uuid) + " - segmentIndex " + String(packet.segmentIndex));
     }
 }
