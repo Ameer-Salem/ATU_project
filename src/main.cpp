@@ -6,6 +6,10 @@ void setFlag(void)
 {
     operationDone = true;
 }
+bool canTransmit()
+{
+    return !transmitFlag && !operationDone;
+}
 
 // ===================== Arduino Setup =====================
 void setup()
@@ -26,6 +30,45 @@ void setup()
 void loop()
 {
     // Handle LoRa events
+    
+    // Handle LoRa ACK
+    if (!outgoingAckQueue.empty() && canTransmit())
+    {
+        Packet ack = outgoingAckQueue.front();
+        
+        outgoingAckQueue.pop();
+        sendPacket(ack);
+    }
+    // Handle BLE ACK
+    if (!ingoingAckQueue.empty() && canTransmit())
+    {
+        Packet ack = ingoingAckQueue.front();
+        
+        int len = toRaw(ack);
+        ingoingAckQueue.pop();
+        notifyBLE(len);
+        memset(buffer, 0, sizeof(buffer));
+    }
+    // Handle LoRa message
+    if (!outgoingQueue.empty() && !transmitFlag && outgoingAckQueue.empty())
+    {
+        Packet tx = outgoingQueue.front();
+        outgoingQueue.pop();
+        sendPacket(tx);
+    }
+    // Handle BLE message
+    if (!ingoingQueue.empty() && ingoingAckQueue.empty())
+    {
+        Packet packet = ingoingQueue.front();
+        int len = toRaw(packet);
+        ingoingQueue.pop();
+        notifyBLE(len);
+        memset(buffer, 0, sizeof(buffer));
+        sLog(BLE_TAG, "Forwarded Buffered TEXT: " + getPayload(packet));
+    }
+
+
+    
     if (operationDone)
     {
         sLog(LORA_TAG, "Previous operation finished");
@@ -35,47 +78,12 @@ void loop()
             sLog(LORA_TAG, "Previous operation was transmission");
             transmitFlag = false;
             startListening();
+            return;
         }
         else
         {
             sLog(LORA_TAG, "Previous operation was reception");
             receive();
         }
-    }
-
-    if (!ackQueue.empty() && !transmitFlag && !operationDone)
-    {
-        Packet ack = ackQueue.front();
-
-        if ((uint64_t)ack.destination == intNODE_ID)
-        {
-            int len = toRaw(ack);
-            ackQueue.pop();
-            notifyChar->setValue(buffer, len);
-            notifyChar->notify();
-            memset(buffer, 0, sizeof(buffer));
-        }
-        else
-        {
-            sendPacket(ack);
-            ackQueue.pop();
-        }
-    }
-    // Handle BLE message
-    if (!outgoingQueue.empty() && !transmitFlag && ackQueue.empty())
-    {
-        Packet tx = outgoingQueue.front();
-        outgoingQueue.pop();
-        sendPacket(tx);
-    }
-    if (!ingoingQueue.empty() && ackQueue.empty())
-    {
-        Packet packet = ingoingQueue.front();
-        int len = toRaw(packet);
-        ingoingQueue.pop();
-        notifyChar->setValue(buffer, len);
-        notifyChar->notify();
-        memset(buffer, 0, sizeof(buffer));
-        sLog(BLE_TAG, "Forwarded Buffered TEXT: " + getPayload(packet));
     }
 }

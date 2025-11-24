@@ -19,4 +19,4 @@ inline const String NODE_NAME = "Node " + String(NODE_ID);
 
 // ===== Protocol Constants =====
 inline constexpr int TEXT_TYPE = 0x01;
-inline constexpr int ACK_TYPE = 0x02;
+inline constexpr int ACK_TYPE = 0x00;

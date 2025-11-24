@@ -6,7 +6,8 @@
 
 extern std::queue<Packet> outgoingQueue;
 extern std::queue<Packet> ingoingQueue;
-extern std::queue<Packet> ackQueue;
+extern std::queue<Packet> outgoingAckQueue;
+extern std::queue<Packet> ingoingAckQueue;
 
 // ===================== LoRa Globals =====================
 extern SX1262 lora;

@@ -13,6 +13,12 @@ BLECharacteristic *readChar;
 uint64_t intNODE_ID;
 String NODE_ID;
 
+void notifyBLE(int len)
+{
+    notifyChar->setValue(buffer, len);
+    notifyChar->notify();
+    sLog(BLE_TAG, "notifyBLE: " + String(len) + "\n");
+}
 void RXCallback::onWrite(BLECharacteristic *characteristic)
 {
     uint8_t *pValue = characteristic->getData();
@@ -39,7 +45,7 @@ void RXCallback::onWrite(BLECharacteristic *characteristic)
         else
         {
             sLog(BLE_TAG, "Transmiting ACK...");
-            ackQueue.push(packet);
+            outgoingAckQueue.push(packet);
         }
     }
 }
@@ -48,6 +54,10 @@ void MyServerCallbacks::onConnect(BLEServer *pServer)
 {
     sLog(BLE_TAG, "Client connected");
     memset(&buffer, 0, sizeof(buffer));
+    while(!outgoingQueue.empty()) outgoingQueue.pop();
+    while(!ingoingQueue.empty()) ingoingQueue.pop();
+    while(!outgoingAckQueue.empty()) outgoingAckQueue.pop();
+    while(!ingoingAckQueue.empty()) ingoingAckQueue.pop();
     bleMessage = "";
     hasNewMessage = false;
     operationDone = false;

@@ -16,7 +16,7 @@ extern  String bleMessage;
 extern  bool hasNewMessage;
 
 void bleSetup();
-
+void notifyBLE(int len);
 class RXCallback : public BLECharacteristicCallbacks
 {
 public:

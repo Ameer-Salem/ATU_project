@@ -9,7 +9,8 @@ bool transmitFlag = false;
 
 std::queue<Packet> outgoingQueue;
 std::queue<Packet> ingoingQueue;
-std::queue<Packet> ackQueue;
+std::queue<Packet> outgoingAckQueue;
+std::queue<Packet> ingoingAckQueue;
 
 void loraBegin(float freq, float bw, int sf, int cr)
 {
@@ -76,7 +77,7 @@ void receive()
     if (packet.type == ACK_TYPE)
     {
         sLog(LORA_TAG, "Received ACK! for segmentIndex " + String(packet.segmentIndex));
-        ackQueue.push(packet);
+        ingoingAckQueue.push(packet);
     }
     else
     {
