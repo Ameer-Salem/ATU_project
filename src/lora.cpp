@@ -29,10 +29,9 @@ void loraBegin(float freq, float bw, int sf, int cr)
 
 void sendPacket(Packet &tx)
 {
-    memset(buffer, 0, sizeof(buffer));
-    int len = toRaw(tx);
+    std::vector<uint8_t> buffer = toRaw(tx);
 
-    state = lora.startTransmit(buffer, len);
+    state = lora.startTransmit(buffer.data(), buffer.size());
     if (state == RADIOLIB_ERR_NONE)
     {
         transmitFlag = true;
@@ -56,9 +55,10 @@ void startListening()
 
 void receive()
 {
-    memset(buffer, 0, sizeof(buffer));
+    std::vector<uint8_t> buffer ;
     int len = lora.getPacketLength();
-    int state = lora.readData(buffer, len);
+    buffer.resize(len);
+    int state = lora.readData(buffer.data(), len);
     Packet packet;
     
     if (len < 21 || buffer[21] > sizeof(packet.payload))
@@ -72,7 +72,7 @@ void receive()
         return;
     }
 
-    packet = fromRaw(buffer, len);
+    packet = fromRaw(buffer.data(), len);
 
     if (packet.type == ACK_TYPE)
     {

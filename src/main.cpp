@@ -29,7 +29,15 @@ void setup()
 // ===================== Arduino Loop =====================
 void loop()
 {
-    // Handle LoRa events
+    // Handle BLE ACK
+    if (!ingoingAckQueue.empty())
+    {
+        Packet ack = ingoingAckQueue.front();
+        
+        std::vector<uint8_t> buffer = toRaw(ack);
+        ingoingAckQueue.pop();
+        notifyBLE(buffer);
+    }
     
     // Handle LoRa ACK
     if (!outgoingAckQueue.empty() && canTransmit())
@@ -38,16 +46,6 @@ void loop()
         
         outgoingAckQueue.pop();
         sendPacket(ack);
-    }
-    // Handle BLE ACK
-    if (!ingoingAckQueue.empty() && canTransmit())
-    {
-        Packet ack = ingoingAckQueue.front();
-        
-        int len = toRaw(ack);
-        ingoingAckQueue.pop();
-        notifyBLE(len);
-        memset(buffer, 0, sizeof(buffer));
     }
     // Handle LoRa message
     if (!outgoingQueue.empty() && !transmitFlag && outgoingAckQueue.empty())
@@ -60,15 +58,15 @@ void loop()
     if (!ingoingQueue.empty() && ingoingAckQueue.empty())
     {
         Packet packet = ingoingQueue.front();
-        int len = toRaw(packet);
+        std::vector<uint8_t> buffer = toRaw(packet);
         ingoingQueue.pop();
-        notifyBLE(len);
-        memset(buffer, 0, sizeof(buffer));
+        notifyBLE(buffer);
         sLog(BLE_TAG, "Forwarded Buffered TEXT: " + getPayload(packet));
     }
-
-
     
+    
+    
+    // Handle LoRa events
     if (operationDone)
     {
         sLog(LORA_TAG, "Previous operation finished");

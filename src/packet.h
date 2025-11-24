@@ -14,11 +14,10 @@ struct Packet
 };
 
 
-extern  uint8_t buffer[255];
 
 void setPayload(Packet &packet);
 //void setPacket(Packet &tx);
-int toRaw(Packet &packet);
+std::vector<uint8_t> toRaw(Packet &packet);
 Packet fromRaw(uint8_t buffer[], int len);
 String getPayload(Packet &packet);
 

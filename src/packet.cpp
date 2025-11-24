@@ -1,6 +1,5 @@
 #include "packet.h"
 
-uint8_t buffer[255];
 void setPayload(Packet &packet)
 {
     const String &myString = getPayload(packet);
@@ -11,30 +10,23 @@ void setPayload(Packet &packet)
     }
 }
 
-int toRaw(Packet &packet)
+std::vector<uint8_t> toRaw(Packet &packet)
 {
-    buffer[0] = packet.type;
-    for (int i = 0; i < sizeof(packet.source); i++)
-    {
-        buffer[1 + i] = packet.source[i];
-    }
-    for (int i = 0; i < sizeof(packet.destination); i++)
-    {
-        buffer[7 + i] = packet.destination[i];
-    }
-    for (int i = 0; i < sizeof(packet.uuid); i++)
-    {
-        buffer[13 + i] = packet.uuid[i];
-    }
-    buffer[19] = packet.segmentIndex;
-    buffer[20] = packet.totalSegments;
-    buffer[21] = packet.length;
+    std::vector<uint8_t> buffer;
+
+    buffer.push_back(packet.type);
     
-    for (int i = 0; i < packet.length; i++)
-    {
-        buffer[22 + i] = packet.payload[i];
-    }
-    return 22 + packet.length;
+    buffer.insert(buffer.end(), packet.source, packet.source + 6);
+    buffer.insert(buffer.end(), packet.destination, packet.destination + 6);
+    buffer.insert(buffer.end(), packet.uuid, packet.uuid + 6);
+
+    buffer.push_back(packet.segmentIndex);
+    buffer.push_back(packet.totalSegments);
+    buffer.push_back(packet.length);
+    
+    buffer.insert(buffer.end(), packet.payload, packet.payload + packet.length);
+
+    return buffer;
 }
 
 Packet fromRaw(uint8_t buffer[], int len)
